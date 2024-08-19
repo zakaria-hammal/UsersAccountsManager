@@ -1,0 +1,76 @@
+@page "/AddUser"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+@attribute [Authorize(Policy = "Can_Add_User")]
+
+<PageTitle>Add Employee</PageTitle>
+
+
+<label>Username :</label> 
+<input type="text" placeholder="Username" @bind="@user.Username"><br><br>
+
+<label>Email</label>
+<input type="email" placeholder="Email" @bind="@user.Email"><br><br>
+
+<label>Password</label>
+<input type="password" placeholder="Password" @bind="@user.Password"><br><br>
+
+<label>Role :</label>
+<InputSelect id="department" @bind-Value="@role">
+    <Option value="">Role</Option>
+    @foreach (var dept in Roles)
+    {
+        <option value="@dept">@dept</option>
+    }
+</InputSelect><br><br>
+
+<h6>@message</h6><br><br>
+
+<button class="btn btn-primary" @onclick="@CreateUserAsync">Add User</button>
+
+@code {
+    private RegisterModel user{get; set;} = new();    
+    private string message{get; set;} = "";
+    private string? role{get; set;} = "";
+    private List<String> Roles{get; set;} = new();
+
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        await AuthStateProvider.GetAuthenticationStateAsync();
+
+        HttpResponseMessage response = await Http.GetAsync("api/User/GetRoles");
+        
+        if (response.IsSuccessStatusCode)
+        {
+            Roles = await Http.GetFromJsonAsync<List<string>>("api/User/GetRoles");
+
+            Roles = Roles.Where(r => r != "Admin" && r != "Superuser").ToList();
+        }
+
+    }
+
+    private async Task CreateUserAsync()
+    {   
+        user.Role = role;
+        user.Two_Factor_Auth = true;
+        
+        var response = await Http.PostAsJsonAsync("/api/Admin/AddUser", user);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/Users", forceLoad:true);
+        }
+
+        if(response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            message = "You must fill all fields";
+        }
+    }
+
+}    

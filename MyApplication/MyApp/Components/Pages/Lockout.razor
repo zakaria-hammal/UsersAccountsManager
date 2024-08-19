@@ -1,0 +1,111 @@
+@page "/Lockout"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+@attribute [Authorize(Policy = "Can_DeleteOrLock_User")]
+
+<PageTitle>Lockout a User</PageTitle>
+    
+Choose a User to lockout
+
+<InputSelect @bind-Value="@lockout.UserName">
+    <Option value="">User</Option>
+    @foreach (var dept in Usernames)
+    {
+        <option value="@dept">@dept</option>
+    }
+</InputSelect>
+<br><br>
+<label>Lockout Duration</label><br><br>
+
+<input type="number" placeholder="Lockout Duration" @bind="time">
+
+<InputSelect @bind-Value="@unit">
+    <Option value="">Unit</Option>
+    @foreach (var dept in units)
+    {
+        <option value="@dept">@dept</option>
+    }
+</InputSelect>
+<br><br>
+
+<button class="btn btn-primary" @onclick="@LockoutUserAsync">Lockout User</button>
+
+@code {
+    private LockoutModel? lockout {get; set;} = new();
+    private List<String>? Usernames{get; set;} = new();
+    private List<UserModel>? Users{get; set;} = new();
+    private HubConnection? hubConnection;
+    private string? me {get; set;} = "";
+    private string unit{get;set;} = "";
+    private int time{get; set;} = new();
+    private List<String> units {get; set;} = new List<String>
+        {
+            "min",
+            "h",
+            "days"
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        await base.OnInitializedAsync();
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5250/chathub")
+            .Build();
+    
+        await hubConnection.StartAsync();
+
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        
+        var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+
+        var response = await Http.GetAsync("api/User/GetAllUsers");
+
+        me = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+
+        Users = new();
+        Usernames = new();
+
+        if(response.IsSuccessStatusCode)
+        {
+            Users = await Http.GetFromJsonAsync<List<UserModel>>("api/User/GetAllUsers");
+
+            Users = Users.Where(u => u.Role != "Admin" && u.Role != "Superuser").ToList();
+
+            foreach(var item in Users)
+            {
+                Usernames.Add(item.UserName);
+            }
+        }
+    }
+
+    private async Task LockoutUserAsync()
+    {   
+        var t = time;
+        if(unit == "h")
+        {
+            t = time * 60;
+        }
+        else if(unit == "days")
+        {
+            t = time * 1440;
+        }
+        
+        lockout.EndDate= DateTime.Now.AddMinutes(t);
+
+        await hubConnection.SendAsync("ChangeMessage", me, lockout.UserName, "You are banned temperorly");
+
+        var response = await Http.PostAsJsonAsync("api/Admin/LockoutUser", lockout);
+
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/", forceLoad:true);
+        }
+
+    }
+}

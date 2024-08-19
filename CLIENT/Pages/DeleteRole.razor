@@ -1,0 +1,57 @@
+@page "/DeleteRole"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalStorageService localStorage
+
+@attribute [Authorize(Policy = "Can_DeleteOrLock_User")]
+
+<PageTitle>Delete a User</PageTitle>
+    
+Choose a User to Delete<br><br>
+
+<InputSelect @bind-Value="@role">
+    <Option value="">Role</Option>
+    @foreach (var dept in Roles)
+    {
+        <option value="@dept">@dept</option>
+    }
+</InputSelect>
+<br><br>
+
+<p style="color: red;">Warning!!!<br>When you delete a role, all users accounts that have that role will be deleted too !!!</p>
+
+<button class="btn btn-primary" @onclick="@DeleteRoleAsync">Delete Role</button>
+
+@code {
+    private string? role {get; set;}
+    private List<String>? Roles{get; set;} = new();
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        
+        var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+
+        var response = await Http.GetAsync("api/User/GetRoles");
+
+        if(response.IsSuccessStatusCode)
+        {
+            Roles = await Http.GetFromJsonAsync<List<string>>("api/User/GetRoles");
+
+            Roles = Roles.Where(r => r != "Admin" && r != "Superuser").ToList();
+        }
+    }
+
+    private async Task DeleteRoleAsync()
+    {  
+        var response = await Http.PostAsJsonAsync("api/User/DeleteRole", role);
+
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/Users", forceLoad:true);
+        }
+    
+    }
+}

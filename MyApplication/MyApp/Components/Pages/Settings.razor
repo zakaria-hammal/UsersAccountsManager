@@ -1,0 +1,83 @@
+@page "/Settings"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+<style>
+    .setting {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: rgb(209, 190, 176);
+        border-radius: 10px;
+        height: 100px;
+    }
+
+    .setting:hover {
+        background-color: rgb(171, 159, 157);
+        cursor: pointer;
+    }
+
+    .setting a {
+        color: rgb(60, 79, 118);
+        font-size: larger;
+    }
+</style>
+
+<PageTitle>Settings</PageTitle>
+
+<CascadingAuthenticationState>
+    <AuthorizeView>
+        <Authorized>
+            @if(user == null)
+            {
+                <p><em>Loading...</em></p>
+            }
+            else
+            {
+                <div style="font-size: large;">
+                    <div class="setting" @onclick="() => nav1()"><a href="Users/@user" style="text-decoration: none;">My Profile</a><br></div>
+                    <hr>
+                    <div class="setting" @onclick="() => nav2()"><a href="ChangeInfos" style="text-decoration: none;">Change Personnal Informations</a><br></div>
+                    <hr>
+                    <div class="setting" @onclick="() => nav3()"><a href="ChangePassword" style="text-decoration: none;">Change Password</a><br></div>
+                    <hr>
+                    <div class="setting" @onclick="() => nav4()"><a href="upload" style="text-decoration: none;">Change Profile Picture</a><br><br></div>
+                </div>
+            }
+        </Authorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+@code {
+    private string? user{get; set;} 
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        user = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+
+    }
+
+    private void nav1()
+    {
+        navigationManager.NavigateTo($"Users/{user}", forceLoad: true);
+    }
+
+    private void nav2()
+    {
+        navigationManager.NavigateTo("ChangeInfos", forceLoad: true);
+    }
+
+    private void nav3()
+    {
+        navigationManager.NavigateTo("ChangePassword", forceLoad: true);
+    }
+
+    private void nav4()
+    {
+        navigationManager.NavigateTo($"upload", forceLoad: true);
+    }
+}

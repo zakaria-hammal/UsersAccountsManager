@@ -1,0 +1,47 @@
+@page "/fetch-image"
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthStateProvider
+
+<h3>Image Viewer</h3>
+
+<button @onclick="LoadImage">Load Image</button><br><br>
+
+@if (!string.IsNullOrEmpty(imageUrl))
+{
+    <img src="@imageUrl" alt="Fetched Image" style="width: 500px; height: 500px;" />
+}
+else if (errorMessage != null)
+{
+    <p class="text-danger">@errorMessage</p>
+}
+
+@code {
+    private string? imageName = "";
+    private string? imageUrl;
+    private string? errorMessage;
+
+    private async Task LoadImage()
+    {
+        try
+        {
+            var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+            imageName = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+
+            errorMessage = null;
+            var response = await Http.GetAsync($"api/image/{imageName}");
+            if (response.IsSuccessStatusCode)
+            {
+                imageUrl = $"http://localhost:5250/api/image/{imageName}"; // URL to the image
+            }
+            else
+            {
+                imageUrl = null;
+                errorMessage = "Image not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+    }
+}

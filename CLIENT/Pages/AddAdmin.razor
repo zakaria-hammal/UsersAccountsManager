@@ -1,0 +1,59 @@
+@page "/AddAdmin"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalStorageService localStorage
+
+@attribute [Authorize(Policy = "Can_Add_Admin")]
+
+<PageTitle>Add Employee</PageTitle>
+
+
+<label>Username :</label> 
+<input type="text" placeholder="Username" @bind="@user.Username"><br><br>
+
+<label>Email</label>
+<input type="email" placeholder="Email" @bind="@user.Email"><br><br>
+
+<label>Password</label>
+<input type="password" placeholder="Password" @bind="@user.Password"><br><br>
+
+<h6>@message</h6><br><br>
+
+<button class="btn btn-primary" @onclick="@CreateUserAsync">Add Admin</button>
+
+@code {
+    private RegisterModel user{get; set;} = new();
+    private string message{get; set;} = "";
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        await AuthStateProvider.GetAuthenticationStateAsync();
+
+    }
+
+    private async Task CreateUserAsync()
+    {   
+        HttpResponseMessage response;
+        
+        user.Role = "Admin";
+        user.Two_Factor_Auth = true;
+        
+        response = await Http.PostAsJsonAsync("/api/Admin/AddAdmin", user);
+
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/Users", forceLoad:true);
+        }
+
+        if(response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            message = "You must fill all fields";
+        }
+        
+    }
+
+}    

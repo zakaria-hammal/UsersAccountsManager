@@ -1,0 +1,63 @@
+@page "/DeleteAdmin"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+@attribute [Authorize(Policy = "Can_Delete_Admin")]
+
+<PageTitle>Delete a User</PageTitle>
+    
+Choose an Admin to Delete<br><br>
+
+<InputSelect @bind-Value="@User">
+    <Option value="">User</Option>
+    @foreach (var dept in Usernames)
+    {
+        <option value="@dept">@dept</option>
+    }
+</InputSelect>
+<br><br>
+
+<button class="btn btn-primary" @onclick="@DeleteUserAsync">Delete Admin</button>
+
+@code {
+    private string? User {get; set;}
+    private List<String>? Usernames{get; set;} = new();
+    private List<UserModel>? Users{get; set;} = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        
+        var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+
+        var response = await Http.GetAsync("api/User/GetAllUsers");
+
+        Users = new();
+        Usernames = new();
+
+        if(response.IsSuccessStatusCode)
+        {
+            Users = await Http.GetFromJsonAsync<List<UserModel>>("api/User/GetAllUsers");
+
+            var adds = Users.Where(u => u.Role == "Admin");
+
+            foreach(var item in adds)
+            {
+                Usernames.Add(item.UserName);
+            }
+        }
+    }
+
+    private async Task DeleteUserAsync()
+    {  
+        var response = await Http.PostAsJsonAsync("api/Init/DeleteUser", User);
+
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/Users", forceLoad:true);
+        }
+    }
+}

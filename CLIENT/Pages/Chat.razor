@@ -1,0 +1,114 @@
+@page "/chat"
+@inject NavigationManager NavigationManager
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager navigationManager
+
+<style>
+    .chat {
+        cursor: pointer;
+        background-color: rgb(101, 83, 86);
+        padding-top: 20px;
+        padding-bottom: 10px;
+        padding-left: 50px;
+        padding-right: 20px;
+        border-radius: 20px;
+        height: 150px;
+        color: rgb(193, 238, 255);
+    }
+
+    .chat:hover {
+        background-color: rgb(81, 59, 60);
+    }
+</style>
+
+<PageTitle>Chat</PageTitle>
+
+<h1>Chat :</h1>
+
+@if(displays is null)
+{
+    <span>Loading</span>
+}
+else
+{
+    foreach(var item in displays)
+    {
+        <div class="chat" @onclick="() => nav(item.user.UserName)">
+            <h2>@item.user.UserName</h2><br>
+            <p style="font-size: large;">@item.message</p>
+        </div>
+        <hr>
+    }
+}
+
+@code {
+    private HubConnection? hubConnection;
+    private string? me {get; set;}
+    private List<Display> displays {get; set;} = new();
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5250/chathub")
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+            {
+                var display = displays.FirstOrDefault(d => d.user.UserName == user); 
+                if(display != null)
+                        display.message = message;
+
+                StateHasChanged();   
+            });
+
+        await hubConnection.StartAsync();
+
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+
+        me = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+
+        var users = await Http.GetFromJsonAsync<List<UserModel>>("api/User/GetAllUsers");
+
+        if(users != null)
+        {
+            var items = users.Where(u => u.Role != "Superuser" && u.UserName != me).ToList();
+
+            foreach(var item in items)
+            {
+                var response = await Http.GetAsync($"api/Contact/GetMessages/{me}&{item.UserName}");
+
+                var joinedRoom = await hubConnection.InvokeAsync<ChatRoom>("JoinRoom", me, item.UserName);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var display = new Display();
+                    var msgs = await Http.GetFromJsonAsync<List<Message>>($"api/Contact/GetMessages/{me}&{item.UserName}");
+                    
+                    display.user = item;
+
+                    if(msgs != null && msgs.Count >= 1)
+                    {
+                        display.message = msgs.Last().MessageBody;
+                    }
+                    else
+                    {
+                        display.message = "";
+                    }
+
+                    displays.Add(display);
+                }
+
+            }
+        }
+    }
+
+    private void nav(string user)
+    {
+        navigationManager.NavigateTo($"/chat/{user}", forceLoad:true);
+    }
+}

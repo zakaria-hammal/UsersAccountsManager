@@ -1,0 +1,30 @@
+﻿@page "/"
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Home</PageTitle>
+<CascadingAuthenticationState>
+    <AuthorizeView>
+        <NotAuthorized>
+            <h1>Hello User</h1>
+            <b>Please Login</b>
+        </NotAuthorized>
+        <Authorized>
+            <h1>Hello @user</h1>
+        </Authorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+@code {
+    private string? user {get; set;} = "";
+
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+
+        var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+
+        user = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+
+    }
+}
+

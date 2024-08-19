@@ -1,0 +1,1 @@
+An application that manages users acccounts.

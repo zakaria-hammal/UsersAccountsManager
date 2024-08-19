@@ -1,0 +1,77 @@
+@page "/DeleteUser"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalStorageService localStorage
+
+@attribute [Authorize(Policy = "Can_DeleteOrLock_User")]
+
+<PageTitle>Delete a User</PageTitle>
+    
+Choose a User to Delete<br><br>
+
+<InputSelect @bind-Value="@User">
+    <Option value="">User</Option>
+    @foreach (var dept in Usernames)
+    {
+        <option value="@dept">@dept</option>
+    }
+</InputSelect>
+<br><br>
+
+<button class="btn btn-primary" @onclick="@DeleteUserAsync">Delete User</button>
+
+@code {
+    private string? User {get; set;}
+    private List<String>? Usernames{get; set;} = new();
+    private List<UserModel>? Users{get; set;} = new();    
+    private HubConnection? hubConnection;
+    private string? me {get; set;} = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5250/chathub")
+            .Build();
+    
+        await hubConnection.StartAsync();
+
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        
+        var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+
+        me = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+
+        var response = await Http.GetAsync("api/User/GetAllUsers");
+
+        Users = new();
+        Usernames = new();
+
+        if(response.IsSuccessStatusCode)
+        {
+            Users = await Http.GetFromJsonAsync<List<UserModel>>("api/User/GetAllUsers");
+
+            Users = Users.Where(u => u.Role != "Admin" && u.Role != "Superuser").ToList();
+
+            foreach(var item in Users)
+            {
+                Usernames.Add(item.UserName);
+            }
+        }
+    }
+
+    private async Task DeleteUserAsync()
+    {  
+        await hubConnection.InvokeAsync("ChangeMessage", me, User, "You are out");
+        var response = await Http.PostAsJsonAsync("api/Admin/DeleteUser", User);
+
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/Users", forceLoad:true);
+        }
+    
+    }
+}

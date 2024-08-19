@@ -1,0 +1,63 @@
+@page "/DeleteProduct"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalStorageService localStorage
+
+@attribute [Authorize(Policy = "Can_Add_Product")]
+
+<PageTitle>Delete a Product</PageTitle>
+    
+Choose a Product to Delete<br><br>
+
+<InputSelect @bind-Value="@Product">
+    <Option value="">Product</Option>
+    @foreach (var dept in Productnames)
+    {
+        <option value="@dept">@dept</option>
+    }
+</InputSelect>
+<br><br>
+
+<button class="btn btn-primary" @onclick="@DeleteProductAsync">Delete Product</button>
+
+@code {
+    private string? Product {get; set;}
+    private List<String>? Productnames{get; set;} = new();
+    private List<Product>? Products{get; set;} = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        
+        var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+
+        var response = await Http.GetAsync("api/Products/GetProducts");
+
+        Products = new();
+        Productnames = new();
+
+        if(response.IsSuccessStatusCode)
+        {
+            Products = await Http.GetFromJsonAsync<List<Product>>("api/Products/GetProducts");
+
+            foreach(var item in Products)
+            {
+                Productnames.Add(item.ProductName);
+            }
+        }
+    }
+
+    private async Task DeleteProductAsync()
+    {  
+        var response = await Http.PostAsJsonAsync("api/Products/DeleteProduct", Product);
+
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/Product", forceLoad:true);
+        }
+    
+    }
+}

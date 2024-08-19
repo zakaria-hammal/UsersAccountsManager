@@ -1,0 +1,112 @@
+@page "/chat/{user}"
+@inject NavigationManager NavigationManager
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>@user</PageTitle>
+<h3>Chat with @user :</h3>
+
+@if(!IsConnected)
+{
+    <span>Connecting ...</span>
+}
+else
+{
+    @if(messages == null)
+    {
+        <span>Loading ...</span>
+    }
+    else
+    {
+        <ul>
+            @foreach(var message in messages)
+            {
+                <li>@message</li>
+            }
+        </ul>
+
+        <input type="text" @bind="messageInput" @bind:event="oninput" @onkeydown="@Enter" placeholder="Message">
+        <button @onclick="Send">Send</button>
+    }
+}
+
+@code {
+    [Parameter]
+    public string? user{get; set;}
+
+    private string messageInput;
+    private HubConnection? hubConnection;
+    private string userName = string.Empty;
+    private List<string>? messages{get; set;} = new();
+    private string? me {get; set;}
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5250/chathub")
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", async (sender, message) =>
+            {
+                await InvokeAsync(() => 
+                {
+                    if(sender == user || sender == me)
+                    {
+                        var msg = $"{sender}: {message}";    
+                        messages.Add(msg);
+                    }
+                    StateHasChanged();
+                });
+                
+            });
+    
+        await hubConnection.StartAsync();
+
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+
+        me = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+
+        var joinedRoom = await hubConnection.InvokeAsync<ChatRoom>("JoinRoom", me, user);
+
+        var response = await Http.GetAsync($"api/Contact/GetMessages/{me}&{user}");
+
+        var msgs = new List<Message>();
+        
+        if (response.IsSuccessStatusCode)
+        {
+            msgs = await Http.GetFromJsonAsync<List<Message>>($"api/Contact/GetMessages/{me}&{user}");
+
+            var Users = await Http.GetFromJsonAsync<List<UserModel>>("api/User/GetAllUsers");
+
+            foreach(var item in msgs)
+            {
+                var sender = Users.FirstOrDefault(u => u.UserId == item.SenderId).UserName;
+                var msg = $"{sender}: {item.MessageBody}";    
+                messages.Add(msg);
+            }
+        }
+
+    }
+
+    public bool IsConnected => hubConnection.State == HubConnectionState.Connected; 
+
+    private async Task Send()
+    {
+        await hubConnection.SendAsync("SendMessage", me, user, messageInput);
+        messageInput = "";
+    }
+
+    public async Task Enter(KeyboardEventArgs e)
+    {
+        if (e.Code == "Enter" || e.Code == "NumpadEnter")
+        {
+            await Send();
+        }
+
+    }
+
+}

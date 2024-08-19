@@ -1,0 +1,117 @@
+﻿@page "/Product"
+@inject HttpClient Http
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager navigationManager
+
+@attribute [Authorize(Policy = "Can_View_Product")]
+
+<PageTitle>Our Products</PageTitle>
+
+<style>
+    button {border-radius: 5px;}
+</style>
+
+<h1>Products</h1>
+<CascadingAuthenticationState>
+    <AuthorizeView Policy="Can_Add_Product">
+        <button class="btn btn-primary" @onclick="nav">Add Product</button><br><br>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+<CascadingAuthenticationState>
+    <AuthorizeView Policy="Can_View_Product">
+        <Authorized>
+            @if (products == null)
+            {
+                <p><em>Loading...</em></p>
+            }
+            else
+            {
+                <label>Product Name :    </label>
+                <input type="text" placeholder="Product Name" @bind-value="@product" @bind-value:event="oninput">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Product Name</th>
+                            <th>Cost</th>
+                            <th>Stock</th>
+                            <th>Discontinued</th>
+                            <th>Category ID</th>
+                            <CascadingAuthenticationState>       
+                                <AuthorizeView Policy="Can_Add_Product" Context="Del">
+                                    <th></th>
+                                </AuthorizeView>
+                            </CascadingAuthenticationState>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var prod in prods)
+                        {
+                            <tr>
+                                <td>@prod.ProductName</td>
+                                <td>@prod.Cost</td>
+                                <td>@prod.Stock</td>
+                                <td>@prod.Discontinued</td>
+                                <td>@prod.CategoryID</td>     
+                                <CascadingAuthenticationState>       
+                                    <AuthorizeView Policy="Can_Add_Product" Context="another">
+                                        <td><button @onclick="() => DeleteProductAsync(prod.ProductName)">Delete</button></td>
+                                    </AuthorizeView>
+                                </CascadingAuthenticationState>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            }
+        </Authorized>
+        <NotAuthorized>
+            You can't view product list
+        </NotAuthorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+@code {
+    private List<Product>? products{get; set;}
+
+    private bool Authorized{get; set;} = true;
+
+    private string? product{get; set;} = String.Empty;
+
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        HttpResponseMessage response = await Http.GetAsync("api/Products/GetProducts");
+
+        await Task.Delay(1500);
+        products = new();
+        
+        if (response.IsSuccessStatusCode)
+        {
+            products = await Http.GetFromJsonAsync<List<Product>>("api/Products/GetProducts");
+        }
+    }
+
+    private void nav()
+    {
+        navigationManager.NavigateTo("AddProduct", forceLoad:true);
+    }
+
+    private List<Product>? prods => products.Where(p => p.ProductName.ToLower().StartsWith(product.ToLower())).ToList();
+
+    private async Task DeleteProductAsync(string product)
+    {  
+        var response = await Http.PostAsJsonAsync("api/Products/DeleteProduct", product);
+
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/Product", forceLoad:true);
+        }
+    
+    }
+}
+

@@ -1,0 +1,83 @@
+@page "/AddRole"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+@attribute [Authorize(Policy = "Can_Add_Role")]
+
+<PageTitle>Add Role</PageTitle>
+
+
+<label>Role Name :</label> 
+<input type="text" placeholder="Username" @bind="@role.Rolename"><br><br>
+
+<br>
+<label>Claims :</label><br><br>
+@if(claims == null || chosens == null)
+{
+    <p>Loading</p>
+}
+else
+{
+    @for(int i = 0; i < claims.Length; i++)
+    {
+        int local = i;
+        <input type="checkbox" @bind-value ="@chosens[local]">
+        <label>@claims[local].Value</label><br><br>
+    }
+}
+<h6>@message</h6><br><br>
+
+<button class="btn btn-primary" @onclick="@CreateRoleAsync">Add Role</button>
+
+@code {
+    private RoleAddModel role{get; set;} = new();    
+    private string message{get; set;} = "";
+    private ClaimModel[]? claims{get; set;}
+
+    private bool[]? chosens{get; set;}
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        await AuthStateProvider.GetAuthenticationStateAsync();
+
+        HttpResponseMessage response = await Http.GetAsync("api/User/GetClaims");
+        
+        if (response.IsSuccessStatusCode)
+        {
+            var cls = await Http.GetFromJsonAsync<List<ClaimModel>>("api/User/GetClaims");
+            claims = cls.ToArray();
+            chosens = new bool[claims.Length];
+        }
+
+    }
+
+    private async Task CreateRoleAsync()
+    {   
+        var Claims = new List<ClaimModel>();
+
+        for(int i = 0; i < claims.Length; i++)
+        {
+            if(chosens[i])
+                Claims.Add(claims[i]);
+        }
+
+        role.Claims = Claims;
+        
+        var response = await Http.PostAsJsonAsync("/api/User/AddRole", role);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/AddUser", forceLoad:true);
+        }
+
+        if(response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            message = "You must fill all fields";
+        }
+    }
+
+}    

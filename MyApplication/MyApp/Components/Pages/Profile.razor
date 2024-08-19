@@ -1,0 +1,218 @@
+@page "/Users/{username}"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+@if(user == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if(user.Role == "Superuser")
+{
+    <CascadingAuthenticationState>
+        <AuthorizeView Policy="Can_Delete_Admin">
+            <h1>Username : @user.UserName</h1><br>
+            <div>
+                @if(me == user.UserName)
+                {
+                    <img @onclick="nav" src="@imageUrl" alt="Fetched Image" style="width: 500px; height: 500px; border-radius: 50%; cursor: pointer;" /><br><br>
+                }
+                else
+                {
+                    <img src="@imageUrl" alt="Fetched Image" style="width: 500px; height: 500px; border-radius: 50%;" /><br><br>
+                }
+            </div>
+
+            <p>Email : @user.Email</p><br>
+            <p>Role : @user.Role</p>            
+        </AuthorizeView>
+    </CascadingAuthenticationState>
+}
+else if(user.Role == "Admin")
+{
+    <CascadingAuthenticationState>
+        <AuthorizeView Policy="Can_View_Admin">
+            <h1>Username : @user.UserName</h1><br>
+            <div>
+                @if(me == user.UserName)
+                {
+                    <img @onclick="nav" src="@imageUrl" alt="Fetched Image" style="width: 500px; height: 500px; border-radius: 50%; cursor: pointer;" /><br><br>
+                }
+                else
+                {
+                    <img src="@imageUrl" alt="Fetched Image" style="width: 500px; height: 500px; border-radius: 50%;" /><br><br>
+                }
+            </div>
+
+            <p>Email : @user.Email</p><br>
+            <p>Role : @user.Role</p>
+        
+        </AuthorizeView>
+        <AuthorizeView Policy="Can_Delete_Admin">
+            <Authorized>
+                <button @onclick="change">Change Role</button><br><br>
+                <InputSelect @bind-Value="@role">
+                    <Option value="">Role</Option>
+                    @foreach (var dept in Roles)
+                    {
+                        <option value="@dept">@dept</option>
+                    }
+                </InputSelect><br><br>
+                <button @onclick="@submit">Submit</button>
+            </Authorized>
+        </AuthorizeView>
+    </CascadingAuthenticationState>
+}
+else
+{
+    <div>
+    @if(me == user.UserName)
+    {
+        <h1>Username : @user.UserName</h1><br>
+        <div>
+            <img @onclick="nav" src="@imageUrl" alt="Fetched Image" style="width: 500px; height: 500px; border-radius: 50%; cursor: pointer;" /><br><br>
+        </div>
+
+        <p>Email : @user.Email</p><br>
+        <p>Role : @user.Role</p><br><br>
+    }
+    else
+    {
+        <CascadingAuthenticationState>
+            <AuthorizeView Policy="Can_View_User">        
+                <h1>Username : @user.UserName</h1><br>
+                <div>
+                    @if(me == user.UserName)
+                    {
+                        <img @onclick="nav" src="@imageUrl" alt="Fetched Image" style="width: 500px; height: 500px; border-radius: 50%; cursor: pointer;" /><br><br>
+                    }
+                    else
+                    {
+                        <img src="@imageUrl" alt="Fetched Image" style="width: 500px; height: 500px; border-radius: 50%;" /><br><br>
+                    }
+                </div>
+
+                <p>Email : @user.Email</p><br>
+                <p>Role : @user.Role</p><br><br>
+            </AuthorizeView>
+        </CascadingAuthenticationState>
+        <CascadingAuthenticationState>
+            <AuthorizeView Policy="Can_Add_Role">
+                    <Authorized>
+                        <button @onclick="change">Change Role</button><br><br>
+                        @if(canChange)
+                        {
+                            <InputSelect @bind-Value="@role">
+                            <Option value="">Role</Option>
+                            @foreach (var dept in Roles)
+                            {
+                                <option value="@dept">@dept</option>
+                            }
+                            </InputSelect><br><br>
+                            <button @onclick="@submit">Submit</button>
+                        }
+                    </Authorized>
+            </AuthorizeView>
+        </CascadingAuthenticationState>
+    }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? username{get; set;}
+
+    private HubConnection? hubConnection;
+    public string? me{get; set;}
+    private UserModel? user{get; set;}
+    private RoleChange roleChange{get; set;} = new();
+    private string? imageName = "";
+    private string? imageUrl;
+    private string? errorMessage;
+    private string role{get; set;} = "";
+    private bool canChange{get; set;} = false;
+    private List<String>? Roles{get; set;} = new();
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5250/chathub")
+            .Build();
+    
+        await hubConnection.StartAsync();
+
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        
+        var state =  await AuthStateProvider.GetAuthenticationStateAsync();
+
+        me = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+
+        var response1 = await Http.GetAsync("api/User/GetAllUsers");
+        
+        var Users = new List<UserModel>();
+        
+        if (response1.IsSuccessStatusCode)
+        {
+            Users = await Http.GetFromJsonAsync<List<UserModel>>("api/User/GetAllUsers");
+
+            user = Users.FirstOrDefault(u => u.UserName == username);
+        }
+
+        try
+        {
+            imageName = user.UserName;
+
+            errorMessage = null;
+            var response = await Http.GetAsync($"api/image/{imageName}");
+            if (response.IsSuccessStatusCode)
+            {
+                imageUrl = $"http://localhost:5250/api/image/{imageName}";
+            }
+            else
+            {
+                imageUrl = null;
+                errorMessage = "Image not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+
+        var response2 = await Http.GetAsync("api/User/GetRoles");
+
+        if(response2.IsSuccessStatusCode)
+        {
+            Roles = await Http.GetFromJsonAsync<List<string>>("api/User/GetRoles");
+
+            Roles = Roles.Where(r => r != "Admin" && r != "Superuser" && r != user.Role).ToList();
+        }
+    }
+
+    private void change()
+    {
+        canChange = !canChange;
+    }
+
+    private async Task submit()
+    {
+        roleChange.User = user;
+        roleChange.NewRole = role;
+
+        await hubConnection.SendAsync("ChangeMessage", me, user.UserName, "Your role has changed");
+
+        var response = await Http.PostAsJsonAsync("api/User/ChangeRole", roleChange);
+
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/Users", forceLoad:true);
+        }
+    }
+
+    private void nav()
+    {
+        navigationManager.NavigateTo("upload", forceLoad:true);
+    }
+}

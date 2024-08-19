@@ -1,0 +1,67 @@
+﻿@page "/AddProduct"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+
+@attribute [Authorize(Policy = "Can_Add_Product")]
+
+<PageTitle>Add Products</PageTitle>
+
+<CascadingAuthenticationState>
+    <AuthorizeView Policy="Can_Add_Product">
+        <Authorized>
+            <h1>Add A Product</h1>
+
+            <label>Product Name :</label> 
+            <input type="text" placeholder="Product Name" @bind="@product.ProductName"><br><br>
+
+            <label>Cost :</label>
+            <input type="number" placeholder="Cost" @bind="@product.Cost"><br><br>
+
+            <label>Stock :</label>
+            <input type="number" placeholder="Stock" @bind="@product.Stock"><br><br>
+
+            <input type="checkbox" @bind="@product.Discontinued">
+            <label>Discontinued</label><br><br>
+
+            <label>Category ID :</label>
+            <input type="number" placeholder="Category Id" @bind="@product.CategoryID"><br><br>
+
+            <h6>@message</h6><br><br>
+
+            <button class="btn btn-primary" @onclick="@CreateProductAsync">Add Product</button>
+        </Authorized>
+        <NotAuthorized>
+            You can't add products
+        </NotAuthorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+@code {
+    private Product product{get; set;} = new();
+    private string message{get; set;} = "";
+
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        await AuthStateProvider.GetAuthenticationStateAsync();
+    }
+
+    private async Task CreateProductAsync()
+    {   
+        var response = await Http.PostAsJsonAsync("/api/Products/PostProduct", product);
+        
+        if (response.IsSuccessStatusCode)
+        {
+            navigationManager.NavigateTo("/Product", forceLoad: true);
+        }
+        
+        if(response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            message = "You must fill all fields";
+        }
+
+    }
+}

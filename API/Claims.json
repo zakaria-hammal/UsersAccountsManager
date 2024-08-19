@@ -1,0 +1,50 @@
+[
+  {
+    "Type": "Can Add Role",
+    "Value": "Can Add Role"
+  },
+  {
+    "Type": "Can Add Admin",
+    "Value": "Can Add Admin"
+  },
+  {
+    "Type": "Can Add Claim",
+    "Value": "Can Add Claim"
+  },
+  {
+    "Type": "Can Add User",
+    "Value": "Can Add User"
+  },
+  {
+    "Type": "Can Add Product",
+    "Value": "Can Add Product"
+  },
+  {
+    "Type": "Can View Role",
+    "Value": "Can View Role"
+  },
+  {
+    "Type": "Can View Admin",
+    "Value": "Can View Admin"
+  },
+  {
+    "Type": "Can View Claim",
+    "Value": "Can View Claim"
+  },
+  {
+    "Type": "Can View User",
+    "Value": "Can View User"
+  },
+  {
+    "Type": "Can View Product",
+    "Value": "Can View Product"
+  },
+  {
+    "Type": "Can DeleteOrLock User",
+    "Value": "Can DeleteOrLock User"
+  },
+  {
+    "Type": "Can Delete Admin",
+    "Value": "Can Delete Admin"
+  }
+]

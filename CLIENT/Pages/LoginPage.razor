@@ -1,0 +1,160 @@
+@page "/Login"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalStorageService localStorage
+
+<PageTitle>Login</PageTitle>
+
+<CascadingAuthenticationState>
+    <AuthorizeView>
+        <NotAuthorized>
+            @if(!sent)
+            {
+                <label>Username : </label>
+                <input type="text" placeholder="Username" @bind="Username"><br><br>
+                <label>Password : </label>
+                <input type="password" placeholder="Password" @bind="Password"><br><br>
+                <h6>@message</h6><br><br>
+                
+                <button class="btn btn-primary" @onclick="@LoginAsync">Login</button>
+                
+            }
+            else
+            {
+                if(correct)
+                {
+                    <p>Check Your email @current.Email</p>
+
+                    <input type="number" placeholder="Code" @bind="@rnd"><br><br>
+
+                    <button class="btn btn-primary" @onclick="@Confirm">Login</button>
+                }
+                if(!correct)
+                {
+                    <p>Wrong Code<br>Retry again</p><br><br>
+                    <p>Check Your email @current.Email</p>
+
+                    <input type="number" placeholder="Code" @bind="@rnd"><br><br>
+
+                    <button class="btn btn-primary" @onclick="@Confirm">Login</button>
+                }
+            }
+        </NotAuthorized>
+        <Authorized>
+            You are already logged in
+        </Authorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+@code {
+    private string? Username {get; set;}
+    private string? Password {get; set;}
+    private LoginModel? login {get; set;}
+    private string message {get; set;} = "";
+    private string token {get; set;} = "";
+    private bool sent{get; set;} = false; 
+    private bool correct{get; set;} = true; 
+    private bool Two_Factor_Auth{get; set;} = false;
+    private UserModel current{get; set;} = new();
+    private int rnd{get; set;}
+    private RegisterModel user{get; set;} = new();
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        
+        await AuthStateProvider.GetAuthenticationStateAsync();
+        
+    }
+    
+    private async Task SendEmail()
+    {
+        user = new RegisterModel
+            {
+                Two_Factor_Auth = true,
+                Email = current.Email,
+                Username = current.UserName,
+                Password = Password,
+                Role = "Client"
+            };
+
+        sent = true;
+        var random = new Random();
+        user.Confirmation_Code = random.Next(1000, 10000);
+
+        var response = await Http.PostAsJsonAsync("/api/Account/confirm", user);
+    }
+
+    private async Task LoginAsync()
+    {
+        if (!String.IsNullOrEmpty(Username) && !String.IsNullOrEmpty(Password))
+        {
+            login = new LoginModel
+            {
+                UserName = Username,
+                Password = Password
+            };
+            
+            var response = await Http.PostAsJsonAsync("api/Account/login", login);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync();
+
+                var Users = await Http.GetFromJsonAsync<List<UserModel>>("api/User/GetAllUsers");
+
+                json = json.ToString();
+            
+                for (int i = 1; i < json.Length - 1; i++)
+                {
+                    token += json[i].ToString();
+                }
+
+                current = Users.FirstOrDefault(u => u.UserName == Username);
+                Two_Factor_Auth = current.Two_Factor_Auth;
+
+                if(Two_Factor_Auth)
+                {
+                    await SendEmail();
+                    sent = true;
+                }
+                else
+                {
+                    await localStorage.SetItemAsync<string>("Token", token);
+                    
+                    await AuthStateProvider.GetAuthenticationStateAsync();
+
+                    navigationManager.NavigateTo("/", forceLoad: true);
+                }
+
+            } 
+            else
+            {
+                message = "Username not found and/or password incorrect";
+            }         
+        }
+        else
+        {
+            message = "You forgot to fill one of the fields";
+        }
+    }
+
+    private async Task Confirm()
+    {
+        if(rnd != user.Confirmation_Code)
+            {
+                correct = false;
+                await SendEmail();
+            }
+        else
+        {
+            await localStorage.SetItemAsync<string>("Token", token);
+            
+            await AuthStateProvider.GetAuthenticationStateAsync();
+
+            navigationManager.NavigateTo("/", forceLoad: true);
+        }
+    }
+} 

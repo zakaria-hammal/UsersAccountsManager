@@ -1,0 +1,142 @@
+﻿@inherits LayoutComponentBase
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JsRuntime
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <CascadingAuthenticationState>
+            <AuthorizeView>
+                <NotAuthorized>
+                    <div class="top-row px-4">
+                        <a href="Login" target="_self">Login</a>
+                        <a href="Register" target="_self">Sign In</a>
+                    </div>
+                </NotAuthorized>
+                <Authorized>
+                    <div class="top-row px-4">
+                        <img @onclick="nav" src="@imageUrl" alt="Fetched Image" style="width: 50px; height: 50px; border-radius: 50%; cursor: pointer;" />
+                        <a href="/Users/@user" target="_self">@user</a>
+                        <a href="/" target="_self" @onclick="@LogoutAsync">Logout</a> 
+                    </div>
+                </Authorized>
+            </AuthorizeView>
+        </CascadingAuthenticationState>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    private HubConnection? hubConnection;
+    private string? imageName = "";
+    private string? imageUrl;
+    private string? errorMessage;
+    private string? user{get; set;} = "";
+    private string? role{get; set;} = "";
+
+    private string isInit = "false";
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://localhost:5250/chathub")
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveChangeMessage", async (User, message) =>
+            {
+                await InvokeAsync(() => 
+                {
+                    if(user != User)
+                    {
+                        JsRuntime.InvokeVoidAsync("Alert", message);
+                        navigationManager.NavigateTo("/", forceLoad: true);
+                        StateHasChanged();
+                    }
+                    
+                });
+                  
+            });
+    
+        await hubConnection.StartAsync();
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+
+        user = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+        role = state.User.FindFirst(c => c.Type.Contains("role"))?.Value;
+        if(user != null)
+        {    
+            var Users = await Http.GetFromJsonAsync<List<UserModel>>("api/User/GetAllUsers");
+
+            var users = Users.Where(u => u.UserName != user && (u.Role == "Superuser" || u.Role == "Admin"));
+
+            foreach(var item in users)
+            {
+                await hubConnection.InvokeAsync<ChatRoom>("JoinRoom", user, item.UserName);
+            }
+        }
+
+        if(role == "Superuser")
+        {
+            var response = await Http.PostAsJsonAsync("/api/Init/Initialization","");        
+
+            if (response.IsSuccessStatusCode)
+            {
+                isInit = await response.Content.ReadAsStringAsync();
+            }
+            
+            if (isInit == "false")
+            {
+                navigationManager.NavigateTo("/", true);
+            }
+        }
+
+        try
+        {
+            imageName = state.User.FindFirst(c => c.Type.Contains("given"))?.Value;
+
+            errorMessage = null;
+            var response = await Http.GetAsync($"api/image/{imageName}");
+            if (response.IsSuccessStatusCode)
+            {
+                imageUrl = $"http://localhost:5250/api/image/{imageName}";
+            }
+            else
+            {
+                imageUrl = null;
+                errorMessage = "Image not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error: {ex.Message}";
+        }
+    }
+
+
+    async Task LogoutAsync()
+    {
+        var refresh = await SecureStorage.Default.GetAsync("Token");
+
+        var response = await Http.PostAsJsonAsync("/api/Account/logout", refresh);
+        
+        SecureStorage.Default.Remove("Token");
+
+        Http.DefaultRequestHeaders.Authorization = null;
+        
+        navigationManager.NavigateTo("/Login", forceLoad: true);
+    }
+
+    private void nav()
+    {
+        navigationManager.NavigateTo("upload", forceLoad:true);
+    }
+}

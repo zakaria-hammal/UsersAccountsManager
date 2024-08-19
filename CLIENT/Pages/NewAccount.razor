@@ -1,0 +1,147 @@
+@page "/Register"
+@inject HttpClient Http
+@inject NavigationManager navigationManager
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILocalStorageService localStorage
+
+<PageTitle>Sign In</PageTitle>
+<CascadingAuthenticationState>
+    <AuthorizeView>
+        <Authorized>
+            You must logout to sign in
+        </Authorized>
+        <NotAuthorized>
+            @if(!sent)
+            {
+                <label>Username :</label> 
+                <input type="text" placeholder="Username" @bind="@user.Username"><br><br>
+
+                <label>Email</label>
+                <input type="email" placeholder="Email" @bind="@user.Email"><br><br>
+
+                <label>Password</label>
+                <input type="password" placeholder="Password" @bind="@user.Password"><br><br>
+
+                <input type="checkbox" @bind="@user.Two_Factor_Auth">
+                <label>Enabel Two-Factor Authentication </label><br><br>
+
+                <h6>@message</h6>
+
+                <br><br>
+
+                <button class="btn btn-primary" @onclick="@SendEmail">Sign In</button>
+            }
+            else
+            {
+                if(correct)
+                {
+                    <p>Check Your email @user.Email</p>
+
+                    <input type="number" placeholder="Code" @bind="@rnd"><br><br>
+
+                    <button class="btn btn-primary" @onclick="@CreateUserAsync">Sign In</button>
+                }
+                if(!correct)
+                {
+                    <p>Wrong Code<br>Retry again</p><br><br>
+                    <p>Check Your email @user.Email</p>
+
+                    <input type="number" placeholder="Code" @bind="@rnd"><br><br>
+
+                    <button class="btn btn-primary" @onclick="@CreateUserAsync">Sign In</button>
+                }
+            }
+        </NotAuthorized>
+    </AuthorizeView>
+</CascadingAuthenticationState>
+
+@code {
+    private RegisterModel user{get; set;} = new();
+
+    private string message{get; set;} = "";
+
+    private bool sent{get; set;} = false; 
+    private bool correct{get; set;} = true; 
+
+    private int rnd{get; set;}
+    
+    protected override async Task OnInitializedAsync() 
+    {
+        await base.OnInitializedAsync();
+        Http.DefaultRequestHeaders.Accept.Clear();
+        Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        user.Role = "Client";
+        await AuthStateProvider.GetAuthenticationStateAsync();
+
+    }
+
+    private async Task SendEmail()
+    {
+        if(user.Email == null || user.Username == null || user.Password == null)
+        {
+            message = "You forgot to fill one of the fields";
+        }
+        else
+        {
+            sent = true;
+            var random = new Random();
+            user.Confirmation_Code = random.Next(1000, 10000);
+
+            var response = await Http.PostAsJsonAsync("/api/Account/confirm", user);
+        }
+    }
+
+    private async Task CreateUserAsync()
+    {   
+
+        if(rnd != user.Confirmation_Code)
+        {
+            correct = false;
+            await SendEmail();
+        }
+        else
+        {
+            var response = await Http.PostAsJsonAsync("/api/Account/register", user);
+
+            if(response.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                message = "You forgot to fill one of the fields";
+            }
+            
+        }
+
+        var login = new LoginModel
+            {
+                UserName = user.Username,
+                Password = user.Password
+            };
+            
+        var response1 = await Http.PostAsJsonAsync("api/Account/login", login);
+
+        if (response1.IsSuccessStatusCode)
+        {
+            var json = await response1.Content.ReadAsStringAsync();
+
+            json = json.ToString();
+            string token = "";
+        
+            for (int i = 1; i < json.Length - 1; i++)
+            {
+                token += json[i].ToString();
+            }
+
+            await localStorage.SetItemAsync<string>("Token", token);
+            
+            await AuthStateProvider.GetAuthenticationStateAsync();
+            
+            navigationManager.NavigateTo("/Upload", forceLoad: true);
+        } 
+        else
+        {
+            message = "Username not found and/or password incorrect";
+        } 
+
+    }
+
+}    
