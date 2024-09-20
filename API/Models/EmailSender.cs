@@ -14,7 +14,7 @@ namespace Projet.Models
         {
             string MailServer = "smtp.gmail.com";
             string FromEmail = "hammalzakaria06@gmail.com";
-            string Password = "afes ezhy kmzi jhjd";
+            string Password = "***Google_Key***";
             int Port = 587;
 
             var client = new SmtpClient(MailServer, Port)
